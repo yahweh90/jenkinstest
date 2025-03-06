@@ -19,7 +19,7 @@ pipeline {
         }
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/yahweh90/JenkinsExperiment1' 
+                git branch: 'main', url: 'https://github.com/yahweh90/jenkinstest' 
             }
         }
         stage('Initialize Terraform') {
