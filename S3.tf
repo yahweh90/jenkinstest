@@ -1,8 +1,8 @@
-resource "aws_s3_bucket" "jenkins_bucket" {
-  bucket = "jenkins_bucket"
+resource "aws_s3_bucket" "pipeline-90" {
+  bucket = "pipeline-90"
 
   tags = {
-    Name        = "jenkins_bucket"
+    Name        = "test"
     Environment = "Dev"
   }
 }
