@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     tools {
-        terraform 'terraform-latest'
+        // terraform 'terraform-latest'
         jfrog 'jfrog-cli'
     }
     
