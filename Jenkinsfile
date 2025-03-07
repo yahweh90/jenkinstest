@@ -1,96 +1,87 @@
 pipeline {
     agent any
+    environment {
+        AWS_REGION = 'us-east-1'
+    }
     tools {
         jfrog 'jfrog-cli'
     }
-    
-    environment {
-        AWS_REGION = 'us-east-1'
-        TF_IN_AUTOMATION = 'true'
-    }
-    
-    options {
-        timestamps()
-        disableConcurrentBuilds()
-        timeout(time: 1, unit: 'HOURS')
-    }
-    
     stages {
-        stage('Cleanup Workspace') {
+        stage('Set AWS Credentials') {
             steps {
-                cleanWs()
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'jenkins'
+                ]]) {
+                    sh '''
+                    echo "AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID"
+                    aws sts get-caller-identity
+                    '''
+                }
             }
         }
         
         stage('Checkout Code') {
             steps {
-                git branch: 'main', 
-                    url: 'https://github.com/yahweh90/jenkinstest',
-                    changelog: true
+                git branch: 'main', url: 'https://github.com/yahweh90/jenkinstest'
             }
         }
-
+        
         stage('Initialize Terraform') {
             steps {
-                sh 'terraform --version'
-                sh 'terraform init -no-color'
+                sh 'terraform init'
             }
         }
-
+        
         stage('Plan Terraform') {
             steps {
-                withAWS(credentials: 'jenkins', region: env.AWS_REGION) {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'jenkins'
+                ]]) {
                     sh '''
-                        terraform plan -no-color -out=tfplan
-                        terraform show -no-color tfplan > tfplan.txt
+                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                    terraform plan -out=tfplan
                     '''
-                    archiveArtifacts artifacts: 'tfplan.txt', fingerprint: true
                 }
             }
         }
-
-stage('Upload Plan to JFrog') {
-            steps {
-                script {
-                    def buildNumber = env.BUILD_NUMBER
-                    def timestamp = sh(script: 'date +%Y%m%d_%H%M%S', returnStdout: true).trim()
-                    def planFileName = "tfplan_${buildNumber}_${timestamp}.txt"
-                    
-                    sh "cp tfplan.txt ${planFileName}"
-                    jf "rt u ${planFileName} terraform-plans/"
-                    
-                    // Optional: Add properties to the uploaded file
-                    jf """rt sp terraform-plans/${planFileName} \
-                        "build.number=${buildNumber}" \
-                        "build.timestamp=${timestamp}" \
-                        "terraform.environment=${env.AWS_REGION}"
-                    """
-                }
-            }
-        }
-
+        
         stage('Apply Terraform') {
             steps {
-                input message: "Review the plan in tfplan.txt. Approve Terraform Apply?", ok: "Deploy"
-                withAWS(credentials: 'jenkins', region: env.AWS_REGION) {
-                    sh 'terraform apply -no-color -auto-approve tfplan'
+                input message: "Approve Terraform Apply?", ok: "Deploy"
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'jenkins'
+                ]]) {
+                    sh '''
+                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                    terraform apply -auto-approve tfplan
+                    '''
                 }
+            }
+        }
+        
+        stage ('Testing with JFrog') {
+            steps {
+                jf '-v'
+                jf 'c show'
+                jf 'rt ping'
+                sh 'touch test-file'
+                jf 'rt u test-file jfrog-cli/'
+                jf 'rt bp'
+                jf 'rt dl jfrog-cli/test-file'
             }
         }
     }
-    
     post {
-        always {
-            cleanWs(cleanWhenNotBuilt: false,
-                   deleteDirs: true,
-                   disableDeferredWipeout: true,
-                   notFailBuild: true)
-        }
         success {
-            echo 'Terraform deployment completed successfully!'
+            echo 'Pipeline execution completed successfully!'
         }
         failure {
-            echo 'Terraform deployment failed!'
+            echo 'Pipeline execution failed!'
         }
     }
 }
