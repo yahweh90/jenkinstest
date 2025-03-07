@@ -1,8 +1,6 @@
 pipeline {
     agent any
-    
     tools {
-        // terraform 'terraform-latest'
         jfrog 'jfrog-cli'
     }
     
@@ -52,21 +50,16 @@ pipeline {
         }
 
         stage('Upload Plan to JFrog') {
-            steps {
-                script {
-                    def buildNumber = env.BUILD_NUMBER
-                    def timestamp = sh(script: 'date +%Y%m%d_%H%M%S', returnStdout: true).trim()
-                    def planFileName = "tfplan_${buildNumber}_${timestamp}.txt"
-                    
-                    sh "cp tfplan.txt ${planFileName}"
-                    jf "rt u ${planFileName} terraform-plans/"
-                    
-                    // Optional: Add properties to the uploaded file
-                    jf """rt sp terraform-plans/${planFileName} \
-                        "build.number=${buildNumber}" \
-                        "build.timestamp=${timestamp}" \
-                        "terraform.environment=${env.AWS_REGION}"
-                    """
+           stages {
+               stage ('Testing') {
+                   steps {
+                       jf '-v' 
+                       jf 'c show'
+                       jf 'rt ping'
+                       sh 'touch test-file'
+                       jf 'rt u test-file jfrog-cli/'
+                       jf 'rt bp'
+                       jf 'rt dl jfrog-cli/test-file'
                 }
             }
         }
