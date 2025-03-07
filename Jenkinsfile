@@ -41,7 +41,7 @@ pipeline {
 
         stage('Plan Terraform') {
             steps {
-                withAWS(credentials: 'AWS_Credentials', region: env.AWS_REGION) {
+                withAWS(credentials: 'jenkins', region: env.AWS_REGION) {
                     sh '''
                         terraform plan -no-color -out=tfplan
                         terraform show -no-color tfplan > tfplan.txt
@@ -74,7 +74,7 @@ pipeline {
         stage('Apply Terraform') {
             steps {
                 input message: "Review the plan in tfplan.txt. Approve Terraform Apply?", ok: "Deploy"
-                withAWS(credentials: 'AWS_Credentials', region: env.AWS_REGION) {
+                withAWS(credentials: 'jenkins', region: env.AWS_REGION) {
                     sh 'terraform apply -no-color -auto-approve tfplan'
                 }
             }
